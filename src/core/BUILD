@@ -10637,6 +10637,7 @@ grpc_cc_library(
     ],
     deps = [
         "avl",
+        "bitset",
         "channelz_property_list",
         "dual_ref_counted",
         "grpc_check",
