@@ -138,9 +138,7 @@ class Http2ClientTransport final : public ClientTransport,
   void SpawnAddChannelzData(RefCountedPtr<Party> party,
                             channelz::DataSink sink);
 
-  auto TestOnlyTriggerWriteCycle() {
-    return Immediate(writable_stream_list_.ForceReadyForWrite());
-  }
+  absl::Status TestOnlyTriggerWriteCycle() { return TriggerWriteCycle(); }
 
   auto TestOnlySendPing(absl::AnyInvocable<void()> on_initiate,
                         bool important = false) {
@@ -165,7 +163,7 @@ class Http2ClientTransport final : public ClientTransport,
   Http2Status ProcessHttp2HeaderFrame(Http2HeaderFrame frame);
   Http2Status ProcessHttp2RstStreamFrame(Http2RstStreamFrame frame);
   Http2Status ProcessHttp2SettingsFrame(Http2SettingsFrame frame);
-  auto ProcessHttp2PingFrame(Http2PingFrame frame);
+  Http2Status ProcessHttp2PingFrame(Http2PingFrame frame);
   Http2Status ProcessHttp2GoawayFrame(Http2GoawayFrame frame);
   Http2Status ProcessHttp2WindowUpdateFrame(Http2WindowUpdateFrame frame);
   Http2Status ProcessHttp2ContinuationFrame(Http2ContinuationFrame frame);
@@ -207,10 +205,10 @@ class Http2ClientTransport final : public ClientTransport,
   auto CallOutboundLoop(CallHandler call_handler, RefCountedPtr<Stream> stream,
                         ClientMetadataHandle metadata);
 
-  // TODO(akshitpatel) : [PH2][P1] : Make this a synchronous function.
-  // Force triggers a transport write cycle
-  auto TriggerWriteCycle() {
-    return Immediate(writable_stream_list_.ForceReadyForWrite());
+  // Triggers a transport write cycle. Will close the transport if this
+  // operation fails.
+  absl::Status TriggerWriteCycle(DebugLocation whence = {}) {
+    return writable_stream_list_.ForceReadyForWrite();
   }
 
   auto FlowControlPeriodicUpdateLoop();
@@ -409,12 +407,12 @@ class Http2ClientTransport final : public ClientTransport,
                : Duration::Seconds(1);
   }
 
-  auto AckPing(uint64_t opaque_data);
+  absl::Status AckPing(uint64_t opaque_data);
 
   class PingSystemInterfaceImpl : public PingInterface {
    public:
     static std::unique_ptr<PingInterface> Make(Http2ClientTransport* transport);
-    Promise<absl::Status> TriggerWrite() override;
+    absl::Status TriggerWrite() override;
     Promise<absl::Status> PingTimeout() override;
 
    private:
@@ -448,7 +446,9 @@ class Http2ClientTransport final : public ClientTransport,
                                                     /*important=*/true);
     }
 
-    void TriggerWriteCycle() override { transport_->TriggerWriteCycle(); }
+    absl::Status TriggerWriteCycle() override {
+      return transport_->TriggerWriteCycle();
+    }
     uint32_t GetLastAcceptedStreamId() override;
 
    private:
